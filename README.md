@@ -121,7 +121,7 @@ python -m rscbot.quality --db data/market.db                  # 覆盖 / 缺口�
 python -m rscbot.quality --db data/market.db --reconcile 3    # 抽样重拉 history 对账（占用额度）
 python -m rscbot.replay --db data/market.db                   # 真实成交 vs 模拟撮合
 python -m rscbot.backtest --db data/market.db --symbol CRYPTO:BTC/USD --rng 1y --fast 10 --slow 30
-python -m rscbot.backtest --db data/market.db --symbol INDEX:SPX --rng 5d --fast 6 --slow 20  # 指数 1y 是周线
+python -m rscbot.backtest --db data/market.db --symbol INDEX:SPX --rng 1d --fast 6 --slow 20  # 指数 1y 是周线，短周期用 1d
 PYTHONPATH=src python -m unittest discover -s tests -t .       # 42 个用例，无需 pytest
 ```
 
