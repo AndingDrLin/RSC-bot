@@ -136,8 +136,10 @@ def main() -> int:
         n = poller.refresh_ids()
         if n:
             poller.seed_backfill()
-        log.info("tier B: %d/%d symbols mapped, interval %.0fs, bars=%d",
-                 n, len(poller.symbols), poller.interval, store.count("bars"))
+        log.info("tier B: %d/%d symbols mapped (%d core + %d candidates), "
+                 "interval %.0fs, bars=%d",
+                 n, len(poller.pool), len(poller.symbols), len(poller.candidates),
+                 poller.interval, store.count("bars"))
 
     t_end = time.time() + args.minutes * 60 if args.minutes else float("inf")
     last_full = 0.0
