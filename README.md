@@ -43,7 +43,7 @@ RSC Bot 是一个面向 [river-side.cc](https://river-side.cc/rsc/market) 虚拟
 - 📊 **2026-10-23** — 监控台 v0.1 发布，提供持仓、委托、行情与系统健康视图。
 - 🐳 **2026-10-23** — Docker 镜像与 Compose 编排就绪，支持局域网访问。
 - 🧭 **2026-10-24** — 数据管道 v0.2：自选池 60 标的（10 类市场）5 分钟 K 线 + 1 小时/日线回补落库；补上日志轮转、WAL checkpoint 与数据库体积统计。
-- 🧮 **2026-10-24** — 质量与回测骨架：`rscbot.quality` 出覆盖/缺口/新鲜度/对账报告（`/api/quality` 同步暴露）；`broker` + `metrics` + `backtest` + `replay` 落地 M3 撮合、保证金、强平、指标与真实成交对拍；41 个单测零第三方依赖。
+- 🧮 **2026-10-24** — 质量与回测骨架：`rscbot.quality` 出覆盖/缺口/新鲜度/对账报告（`/api/quality` 同步暴露）；`broker` + `metrics` + `backtest` + `replay` 落地 M3 撮合、保证金、强平、指标与真实成交对拍；42 个单测零第三方依赖。
 - 🧪 **2026-10-24** — 数据管道 v0.3：实测交易所 `history.json` 对约一半标的返回归档 K 线（`archived: true`），新增归档降频复查（300s → 1800s）+ 38 个候选标的补位 + 429 全局冷却，看板加"活标的"计数。
 
 ## 🚀 快速开始
@@ -120,14 +120,17 @@ python -m uvicorn rscbot.web.app:app --host 0.0.0.0 --port 8001     # 监控台
 python -m rscbot.quality --db data/market.db                  # 覆盖 / 缺口率 / 新鲜度
 python -m rscbot.quality --db data/market.db --reconcile 3    # 抽样重拉 history 对账（占用额度）
 python -m rscbot.replay --db data/market.db                   # 真实成交 vs 模拟撮合
-python -m rscbot.backtest --db data/market.db --symbol INDEX:SPX --rng 1y --fast 10 --slow 30
-python -m unittest discover -s tests                          # 41 个用例，无需 pytest
+python -m rscbot.backtest --db data/market.db --symbol CRYPTO:BTC/USD --rng 1y --fast 10 --slow 30
+python -m rscbot.backtest --db data/market.db --symbol INDEX:SPX --rng 5d --fast 6 --slow 20  # 指数 1y 是周线
+PYTHONPATH=src python -m unittest discover -s tests -t .       # 42 个用例，无需 pytest
 ```
 
 `/api/quality` 与 `rscbot.quality` 同源、不联网，5 秒轮询不占交易所额度；缺口率的口径是"首末根之间的应有槽位数"，不代表交易日历意义上的缺失（M2-T5 日历未落地）。
 
 自选池在 [config/watchlist.json](config/watchlist.json) 配置（`symbols` / `candidates` 数组、`interval_s`、`slow_interval_s`、`backfill` 过期阈值），改完重启 collector 生效。
 `bars` 表主键 `(instrument_id, rng, ts)`：`rng` 记录来源 range（`1d`=5m、`5d`=1h、`1y`=日线），`ts` 统一 UTC epoch 秒，幂等重写。
+
+两个实测口径提醒：① `1y` 对**指数**（`INDEX:*`）和贵金属 ETF（`AMEX:GLD/SLV/PPLT/PALL`）返回的是**周线**（约 54 根，相邻间隔 604800s），对股票/加密才是 365 根日线；跨市场回测别假设 1y 一定是 365 根。② 2026-06 的 3 笔 `CRYPTO:ETH/USD`（15x）真实费用是 `fee_bps` 的 2 倍，7 月之后的成交与其余 27 笔都是 1 倍，`replay` 会把这类单列出来。
 
 ## ⚙️ 配置
 

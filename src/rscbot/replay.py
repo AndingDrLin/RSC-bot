@@ -19,6 +19,7 @@ import os
 import sqlite3
 import sys
 from datetime import datetime
+from statistics import median as _median
 
 
 def connect(db: str) -> sqlite3.Connection:
@@ -103,11 +104,22 @@ def compare(conn: sqlite3.Connection, max_age_s: int = 900) -> dict:
         rows.append(rec)
     checked = [r for r in rows if "fee_err" in r]
     priced = [r for r in rows if "price_bps" in r]
+    rels = sorted(r["fee_err_rel"] for r in checked)
+    median_rel = _median(rels) if rels else 0.0
+    outliers = [
+        {"order_id": r["order_id"], "symbol": r["symbol"], "side": r["side"],
+         "fee_real": r["fee_real"], "fee_sim": r["fee_sim"],
+         "ratio": (r["fee_real"] / r["fee_sim"]) if r["fee_sim"] else 0.0}
+        for r in sorted(checked, key=lambda x: x["fee_err_rel"], reverse=True)
+        if r["fee_err_rel"] > 0.05
+    ]
     return {
         "orders": len(rows),
         "fee_checked": len(checked),
         "max_fee_err": max((r["fee_err"] for r in checked), default=0.0),
         "max_fee_err_rel": max((r["fee_err_rel"] for r in checked), default=0.0),
+        "fee_err_rel_median": median_rel,
+        "fee_outliers": outliers,
         "price_checked": len(priced),
         "priced_age_days": sorted(round((_now() - r["fill_ts"]) / 86400.0, 1) for r in priced),
         "max_price_bps": max((r["price_bps"] for r in priced), default=0.0),
@@ -119,10 +131,17 @@ def compare(conn: sqlite3.Connection, max_age_s: int = 900) -> dict:
 def _fmt(rep: dict) -> str:
     lines = [
         f"成交 {rep['orders']} 笔   费用可比 {rep['fee_checked']} 笔   "
-        f"最大费用误差 {rep['max_fee_err']:.3g}（相对 {rep['max_fee_err_rel']:.2g}）",
+        f"最大费用误差 {rep['max_fee_err']:.3g}（相对 {rep['max_fee_err_rel']:.2g}）"
+        f"   中位相对误差 {rep.get('fee_err_rel_median', 0.0):.2g}",
         f"有前序报价 {rep['price_checked']} 笔   成交价偏差 均值 {rep['mean_price_bps']:.2f} bp   "
         f"最大 {rep['max_price_bps']:.2f} bp",
     ]
+    out = rep.get("fee_outliers") or []
+    if out:
+        lines.append(f"费用口径不符 {len(out)} 笔（真实费用/模拟费用）:")
+        for r in out[:5]:
+            lines.append(f"  #{r['order_id']} {r['symbol']:14s} {r['side']:5s} "
+                         f"real={r['fee_real']:.6g} sim={r['fee_sim']:.6g} ×{r['ratio']:.2f}")
     worst = sorted((r for r in rep["rows"] if "price_bps" in r),
                    key=lambda r: r["price_bps"], reverse=True)[:5]
     if worst:

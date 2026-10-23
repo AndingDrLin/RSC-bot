@@ -276,6 +276,7 @@ stages:
   - contract:  pytest tests/contract   # 每日定时也跑一次
   - integration: pytest tests/integration  # 起 mock-exchange
   - replay:    pytest tests/replay --slow   # 夜间
+# 当前实现是 unittest（零依赖）：PYTHONPATH=src python -m unittest discover -s tests -t .
   - security:  gitleaks, pip-audit, trivy
   - build:     docker buildx（多阶段，缓存）
   - smoke:     compose up + 健康检查 + 只读探针
