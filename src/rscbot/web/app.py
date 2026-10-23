@@ -230,3 +230,13 @@ def api_summary():
         return JSONResponse(build_summary())
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/quality")
+def api_quality():
+    """M2-T6 质量报告：覆盖/缺口/新鲜度。不联网，5 秒轮询也不占交易所额度。"""
+    try:
+        from rscbot.quality import report as quality_report
+        return JSONResponse(quality_report(DB))
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=500)

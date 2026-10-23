@@ -74,7 +74,7 @@ flowchart LR
 | M2-T3 K 线重建 | **部分** | 直接用交易所 5m/1h/1d K 线落库（不复算）；缺口标记未做，时间戳本身已是 UTC |
 | M2-T4 存储层 | **未做** | 仍是 SQLite WAL，未上 Parquet/DuckDB |
 | M2-T5 交易日历 | **未做** | — |
-| M2-T6 数据质量 | **部分** | `bars_live_1d`（24h 内有 K 线的标的数）进看板；归档标的计数在 collector 的 `pipeline:` 日志里 |
+| M2-T6 数据质量 | **完成（骨架）** | [quality.py](../src/rscbot/quality.py)：覆盖/缺口率（首末根之间应有槽位 vs 实际）、新鲜度（活/归档按市场分布）、抽样重拉 history 逐根对账；CLI `python -m rscbot.quality`，看板侧 `/api/quality`。跳变检测与时间倒流未做 |
 
 ### 验收（DoD）
 - `docker compose up` 后 5 个服务全部 healthy，`curl /healthz` 返回 200。
@@ -155,6 +155,18 @@ flowchart LR
 | M3-T5 | **黄金用例**：20 个手算场景（含强平、杠杆、多空、跨日） | `tests/golden` | 1.5 |
 | M3-T6 | 向量化回测（Polars）：因子筛选用，秒级跑完 1 年 × 60 标的 | `vector.py` | 1.5 |
 | M3-T7 | Paper Broker 对拍：用真实成交记录重放，比较模拟 vs 实际成交价/费用 | `tests/replay` | 1.0 |
+
+### M3 当前进度（2026-10-24）
+
+| 任务 | 状态 | 说明 |
+|---|---|---|
+| M3-T1 撮合模型 | **骨架** | [broker.py](../src/rscbot/broker.py)：市价成交、5% 漂移拒单、`fee = notional × fee_bps / 1e4`（BTC 真实成交验证到 1e-15）、开平各收一次 |
+| M3-T2 组合与保证金 | **骨架** | `margin = notional / L`；强平价 `entry × (1 ∓ 0.75/L)`，FX:JPY 20x 算出 0.006143 与交易所一致；balance/equity/available 口径对齐 `state.wallet` |
+| M3-T3 事件引擎 | **骨架** | [backtest.py](../src/rscbot/backtest.py)：多标的 bar 归并成单一虚拟时钟、逐 bar 强平/止盈止损检查、权益快照；附 SMA 演示策略与 CLI |
+| M3-T4 指标 | **完成** | [metrics.py](../src/rscbot/metrics.py)：总收益、CAGR、Sharpe、Sortino、Calmar、MaxDD、波动率、胜率、盈亏比、费用/换手；年化按 bar 中位间隔推算 |
+| M3-T5 黄金用例 | **部分** | [tests](../tests/) 41 个用例（unittest，零第三方依赖）：费用/保证金/强平/多空/部分平仓/漂移/止盈止损/指标/引擎复现性；手算 20 场景仍缺 12 |
+| M3-T6 向量化回测 | **未做** | 需引入 Polars，暂用事件引擎 |
+| M3-T7 Paper Broker 对拍 | **完成（骨架）** | [replay.py](../src/rscbot/replay.py)：真实成交的费用与成交价偏差，输出最大费用误差、bp 分布、Top5 偏差单 |
 
 ### 验收
 - 黄金用例 **20/20 通过**，覆盖：1x 多单、10x 多单、20x 空单、强平触发、止盈止损、部分平仓、跨日持仓、费用精确到 1e-12。
