@@ -71,6 +71,43 @@ class FreshnessTest(unittest.TestCase):
         self.assertEqual(f["live_1d_by_category"], {"us": 1})
 
 
+class AnomalyTest(unittest.TestCase):
+    def test_jump_is_flagged(self):
+        path = _db([(1, "X", "us", 0, 100.0), (1, "X", "us", 300, 150.0)])
+        try:
+            conn = quality.connect(path)
+            a = quality.anomalies(conn, now=600)
+            conn.close()
+        finally:
+            os.unlink(path)
+        self.assertEqual(a["spikes"]["total"], 1)
+        self.assertAlmostEqual(a["spikes"]["worst"][0]["ret"], 0.5, places=6)
+
+    def test_normal_move_and_future_ts(self):
+        path = _db([(1, "X", "us", 0, 100.0), (1, "X", "us", 300, 101.0),
+                    (1, "X", "us", 99999, 101.5)])
+        try:
+            conn = quality.connect(path)
+            a = quality.anomalies(conn, now=600)
+            conn.close()
+        finally:
+            os.unlink(path)
+        self.assertEqual(a["spikes"]["total"], 0)
+        self.assertEqual(a["future_bars"], 1)
+        self.assertEqual(a["future_sample"][0]["symbol"], "X")
+
+    def test_flat_run_is_counted(self):
+        path = _db([(1, "X", "us", ts, 100.0) for ts in range(0, 300 * 10, 300)])
+        try:
+            conn = quality.connect(path)
+            a = quality.anomalies(conn, now=3000, flat_n=6)
+            conn.close()
+        finally:
+            os.unlink(path)
+        self.assertEqual(a["flat"]["runs"], 1)
+        self.assertEqual(a["flat"]["worst"][0]["bars"], 10)
+
+
 class ReportTest(unittest.TestCase):
     def test_missing_db_returns_error(self):
         rep = quality.report("/nonexistent/market.db")

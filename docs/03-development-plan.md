@@ -74,7 +74,7 @@ flowchart LR
 | M2-T3 K 线重建 | **部分** | 直接用交易所 5m/1h/1d K 线落库（不复算）；缺口标记未做，时间戳本身已是 UTC |
 | M2-T4 存储层 | **未做** | 仍是 SQLite WAL，未上 Parquet/DuckDB |
 | M2-T5 交易日历 | **未做** | — |
-| M2-T6 数据质量 | **完成（骨架）** | [quality.py](../src/rscbot/quality.py)：覆盖/缺口率（首末根之间应有槽位 vs 实际）、新鲜度（活/归档按市场分布）、抽样重拉 history 逐根对账；CLI `python -m rscbot.quality`，看板侧 `/api/quality`。跳变检测与时间倒流未做 |
+| M2-T6 数据质量 | **完成（骨架）** | [quality.py](../src/rscbot/quality.py)：覆盖/缺口率（按自然日窗口）、新鲜度（活/归档按市场分布）、异常检测（相邻 bar 涨跌 > 20% 的跳变、未来时间戳、连续 ≥6 根同价横盘）、抽样重拉 history 逐根对账；CLI `python -m rscbot.quality`，看板侧 `/api/quality`。闭市期异常报价要等交易日历（M2-T5）落地后才能判 |
 
 ### 验收（DoD）
 - `docker compose up` 后 5 个服务全部 healthy，`curl /healthz` 返回 200。

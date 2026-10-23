@@ -5,6 +5,8 @@ history 对账一致"，靠手敲 SQL 没法每天复现。这里把三者做成
 
   coverage   每个标的的 bar 数 vs 时间跨度内应有的槽位数 → 缺口率
   freshness  最后一根 K 线距今多久 → 活标的 / 归档标的（交易所只发旧数据）
+  anomalies  跳变（相邻 bar 收盘价涨跌幅 > 阈值）、时间倒流（未来时间戳）、
+             长时间横盘（连续相同收盘价）——归档数据恢复时最容易出这三类
   reconcile  抽样重新拉 history.json，逐根比对 close（可选，要占额度）
 
 口径说明：没有交易日历（M2-T5 未做），缺口率用"首末根之间的应有槽位数"做分母，
@@ -131,6 +133,79 @@ def freshness(conn: sqlite3.Connection, now: int | None = None) -> dict:
     return out
 
 
+def anomalies(conn: sqlite3.Connection, now: int | None = None,
+              spike_pct: float = 0.20, future_slack: int = 300,
+              flat_n: int = 6) -> dict:
+    """跳变 / 未来时间戳 / 长时间横盘。
+
+    归档标的恢复后，旧 K 线和今天的 K 线会在同一个 instrument_id 下接起来，
+    接缝处往往是一根 30% 的"跳变"；反过来，交易所把最后一根 bar 的时间戳写成
+    未来（时区处理错误）也会污染回测。两者都不是策略信号，必须在入因子前剔掉，
+    所以单独作为质量指标暴露出来。
+    """
+    now = int(time.time()) if now is None else now
+    out: dict = {"now": now, "spike_pct": spike_pct,
+                 "future_bars": 0, "future_sample": [],
+                 "spikes": {"total": 0, "by_rng": {}, "worst": []},
+                 "flat": {"runs": 0, "worst": []}}
+    if not _has_table(conn, "bars"):
+        return out
+    rows = conn.execute(
+        """SELECT b.instrument_id, i.symbol, b.rng, b.ts, b.close
+             FROM bars b LEFT JOIN instruments i ON i.id = b.instrument_id
+            WHERE b.close IS NOT NULL AND b.close > 0
+            ORDER BY b.instrument_id, b.rng, b.ts"""
+    ).fetchall()
+    key = None
+    prev_close = prev_ts = None
+    flat_start = None
+    flat_len = 0
+    spikes = []
+    flats = []
+    last_sym = None
+    for r in rows:
+        k = (r["instrument_id"], r["rng"])
+        if k != key:
+            key, prev_close, prev_ts = k, None, None
+            flat_start, flat_len = None, 0
+        ts, close = r["ts"], float(r["close"])
+        last_sym = r["symbol"]
+        if ts > now + future_slack:
+            out["future_bars"] += 1
+            if len(out["future_sample"]) < 5:
+                out["future_sample"].append(
+                    {"symbol": r["symbol"] or str(r["instrument_id"]), "rng": r["rng"],
+                     "ahead_s": ts - now})
+        if prev_close and prev_close > 0:
+            ret = close / prev_close - 1.0
+            if abs(ret) > spike_pct:
+                spikes.append({"symbol": r["symbol"] or str(r["instrument_id"]),
+                               "rng": r["rng"], "ts": ts, "ret": round(ret, 4),
+                               "gap_s": ts - prev_ts})
+        if prev_close is not None and abs(close - prev_close) < 1e-9:
+            flat_len += 1
+            if flat_len == 1:
+                flat_start = prev_ts
+        else:
+            if flat_len + 1 >= flat_n and flat_start is not None:
+                flats.append({"symbol": r["symbol"] or str(r["instrument_id"]),
+                              "rng": r["rng"], "start": flat_start, "ts": ts,
+                              "bars": flat_len + 1})
+            flat_len, flat_start = 0, None
+        prev_close, prev_ts = close, ts
+    if flat_len + 1 >= flat_n and flat_start is not None and key is not None:
+        flats.append({"symbol": last_sym or str(key[0]), "rng": key[1],
+                      "start": flat_start, "ts": prev_ts, "bars": flat_len + 1})
+    by_rng: dict[str, int] = {}
+    for sp in spikes:
+        by_rng[sp["rng"]] = by_rng.get(sp["rng"], 0) + 1
+    spikes.sort(key=lambda x: abs(x["ret"]), reverse=True)
+    flats.sort(key=lambda x: x["bars"], reverse=True)
+    out["spikes"] = {"total": len(spikes), "by_rng": by_rng, "worst": spikes[:5]}
+    out["flat"] = {"runs": len(flats), "worst": flats[:5]}
+    return out
+
+
 def reconcile(conn: sqlite3.Connection, client, rng: str = "1d", sample: int = 3,
               now: int | None = None) -> dict:
     """抽样重拉交易所 history，逐根比对 close；同源写入应当完全一致。"""
@@ -193,6 +268,7 @@ def report(db: str, now: int | None = None) -> dict:
             "db_mb": _db_mb(db),
             "coverage": {rng: coverage(conn, rng, now) for rng in BAR_STEP},
             "freshness": freshness(conn, now),
+            "anomalies": anomalies(conn, now),
         }
         if _has_table(conn, "quotes"):
             last = conn.execute("SELECT MAX(ts) AS m, COUNT(*) AS n FROM quotes").fetchone()
@@ -242,6 +318,14 @@ def _fmt(rep: dict) -> str:
     live = rep["freshness"]["live_1d_by_category"]
     if live:
         lines.append("活标的分布: " + "  ".join(f"{k}={v}" for k, v in live.items()))
+    a = rep.get("anomalies") or {}
+    if a:
+        lines.append("")
+        lines.append(f"跳变(>±{a['spike_pct']*100:.0f}%) {a['spikes']['total']} 处 "
+                     f"{dict(a['spikes']['by_rng']) or ''}   未来时间戳 {a['future_bars']} 根   "
+                     f"横盘 {a['flat']['runs']} 段")
+        for sp in a["spikes"]["worst"][:3]:
+            lines.append(f"  跳变 {sp['symbol']:16s} {sp['rng']} {sp['ret']*100:+.1f}%")
     worst = rep["coverage"]["1d"]["worst"]
     if worst:
         lines.append("")
