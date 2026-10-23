@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
@@ -16,10 +17,13 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from rscbot.store import db_size_mb
+
 BASE = Path(__file__).parent
 DB = os.environ.get("RSC_DB") or (
     "/app/data/market.db" if os.path.isdir("/app/data") else "data/market.db"
 )
+WATCHLIST = Path(os.environ.get("RSC_WATCHLIST") or (BASE.parents[2] / "config" / "watchlist.json"))
 STARTED = time.time()
 
 app = FastAPI(title="RSC Bot", docs_url=None, redoc_url=None, openapi_url=None)
@@ -146,7 +150,23 @@ def build_summary() -> dict:
     )
     n_quotes = rows("SELECT COUNT(*) AS c FROM quotes")
 
-    db_mb = os.path.getsize(DB) / 1e6 if os.path.exists(DB) else 0.0
+    # K 线覆盖（bars 表可能还不存在，rows() 会吞掉 no such table）
+    bars = {
+        r["rng"]: {"rows": r["c"], "symbols": r["s"], "last_ts": r["m"]}
+        for r in rows(
+            "SELECT rng, COUNT(*) AS c, COUNT(DISTINCT instrument_id) AS s, "
+            "MAX(ts) AS m FROM bars GROUP BY rng"
+        )
+    }
+    fresh = rows("SELECT COUNT(DISTINCT instrument_id) AS c FROM quotes WHERE ts >= ?",
+                 (int(time.time()) - 900,))
+    watchlist_n = 0
+    try:
+        watchlist_n = len(json.loads(WATCHLIST.read_text(encoding="utf-8")).get("symbols") or [])
+    except (OSError, ValueError):
+        pass
+
+    db_mb = db_size_mb(DB) if os.path.exists(DB) else 0.0
 
     return {
         "ts": int(time.time()),
@@ -171,6 +191,9 @@ def build_summary() -> dict:
             "collector_age_s": int(time.time() - last) if last else None,
             "ticks_today": (ticks_today[0]["c"] if ticks_today else 0),
             "quotes_rows": (n_quotes[0]["c"] if n_quotes else 0),
+            "bars": bars,
+            "watchlist_n": watchlist_n,
+            "quote_symbols_15m": (fresh[0]["c"] if fresh else 0),
             "db_mb": round(db_mb, 1),
             "uptime_s": int(time.time() - STARTED),
             "db_exists": os.path.exists(DB),

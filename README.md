@@ -42,6 +42,7 @@ RSC Bot 是一个面向 [river-side.cc](https://river-side.cc/rsc/market) 虚拟
 - 📡 **2026-10-23** — 行情采集器上线，60s 增量快照落库，支持全量元数据定时刷新。
 - 📊 **2026-10-23** — 监控台 v0.1 发布，提供持仓、委托、行情与系统健康视图。
 - 🐳 **2026-10-23** — Docker 镜像与 Compose 编排就绪，支持局域网访问。
+- 🧭 **2026-10-24** — 数据管道 v0.2：自选池 60 标的（10 类市场）5 分钟 K 线 + 1 小时/日线回补落库；补上日志轮转、WAL checkpoint 与数据库体积统计。
 
 ## 🚀 快速开始
 
@@ -72,7 +73,7 @@ docker compose up -d --build
 http://<主机IP>:8001
 ```
 
-首次启动会拉取一次全量快照（约 3.4 MB），随后按 60s 周期增量采集。数据持久化在宿主机 `./data/`。
+首次启动会拉取一次全量快照（约 3.4 MB），随后按 60s 周期采集热门池；自选池（`config/watchlist.json`，默认 60 个标的）每 5 分钟补一次 5m K 线，并异步回补 1 小时/日线。数据持久化在宿主机 `./data/`。
 
 ### 本地开发
 
@@ -97,6 +98,20 @@ python -m uvicorn rscbot.web.app:app --host 0.0.0.0 --port 8001     # 监控台
 
 数据视图每 5 秒轮询 `/api/summary`，不直接请求交易所接口，避免占用交易限频额度。
 
+### 数据管道
+
+`collector` 在一轮循环里分层取数，总预算 ≤ 25 req/min（服务端上限 30）：
+
+| 层级 | 数据 | 频率 | 额度 |
+|---|---|---|---|
+| Tier A 热门池 | `state.json?section=market` → `quotes` | 60s | 1/min |
+| Tier B 自选池 | `history.json?range=1d` → `bars`（5m）+ 看板报价 | 5min × 60 标的 | ~12/min |
+| Tier C 回补 | `history.json?range=5d\|1y` → `bars`（1h / 日线） | 启动时或数据过期后 | 剩余额度 |
+| 元数据 | `state.json` 全量 → `instruments` | 30min | 1/30min |
+
+自选池在 [config/watchlist.json](config/watchlist.json) 配置（`symbols` 数组、`interval_s`、`backfill` 过期阈值），改完重启 collector 生效。
+`bars` 表主键 `(instrument_id, rng, ts)`：`rng` 记录来源 range（`1d`=5m、`5d`=1h、`1y`=日线），`ts` 统一 UTC epoch 秒，幂等重写。
+
 ## ⚙️ 配置
 
 | 变量 | 默认值 | 说明 |
@@ -107,6 +122,7 @@ python -m uvicorn rscbot.web.app:app --host 0.0.0.0 --port 8001     # 监控台
 | `RSC_DB` | `data/market.db` | SQLite 路径；容器内为 `/app/data/market.db` |
 | `RSC_PER_MINUTE` | `25` | 客户端限频上限，服务端为 30 |
 | `RSC_TIMEOUT_S` | `60` | 单请求超时（秒） |
+| `RSC_WATCHLIST` | `config/watchlist.json` | 自选池配置文件路径（collector 与 web 共用） |
 | `BASE_IMAGE` | `docker.m.daocloud.io/library/python:3.12-slim` | 构建基础镜像，海外可改为 `python:3.12-slim` |
 | `PIP_INDEX` | 清华源 | pip 镜像 |
 | `APT_MIRROR` | 阿里云 | Debian 镜像 |

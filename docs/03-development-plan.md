@@ -64,6 +64,18 @@ flowchart LR
 实测覆盖的契约点：登录/CSRF、下单（含内联 tp/sl）、幂等重放（`replayed:true` 同 order_id）、平仓、撤单成功与二次撤单、保护单设置/清空/两种非法值、`refresh.json`、9 个错误码。
 **未覆盖**：429 限频行为、待成交单超时释放、`high_risk` 额度打满、赛事/事件预测、会话 30 天过期续期。
 
+### 当前进度（2026-10-24，A6000 实测）
+
+| 任务 | 状态 | 说明 |
+|---|---|---|
+| M2-T1 标的目录 | **完成** | 全量 `state.json` 每 30 min 刷新 `instruments`（1638 条），比计划的每日 1 次更频繁 |
+| M2-T2 分层轮询 | **完成** | [poller.py](../src/rscbot/poller.py) + [collector.py](../src/rscbot/collector.py)：Tier A 60s / Tier B 5min（60 标的摊平到 300s）/ Tier C 回补 |
+| M2-T7 回补 | **完成** | 启动时按 `bars` 最新时间判断过期，队列化补 `1y` 日线 + `5d` 小时线，失败 3 次放弃 |
+| M2-T3 K 线重建 | **部分** | 直接用交易所 5m/1h/1d K 线落库（不复算）；缺口标记未做，时间戳本身已是 UTC |
+| M2-T4 存储层 | **未做** | 仍是 SQLite WAL，未上 Parquet/DuckDB |
+| M2-T5 交易日历 | **未做** | — |
+| M2-T6 数据质量 | **未做** | 目前只有 `bars` 覆盖计数（看板"运行状态"） |
+
 ### 验收（DoD）
 - `docker compose up` 后 5 个服务全部 healthy，`curl /healthz` 返回 200。
 - `pytest tests/contract` 全绿，且**断网也能跑**（全部走 mock/fixture）。
@@ -117,7 +129,7 @@ flowchart LR
 | M2-T7 | 回补任务：收盘后按需补 `1y` 日线 + `5d` 小时线，幂等 | `backfill` | 1.0 |
 
 ### 验收
-- 覆盖：≥ 60 个标的（10 类市场各 ≥ 4）× 5 个交易日。
+- 覆盖：≥ 60 个标的（10 类市场各 ≥ 4）× 5 个交易日。（当前配置 60 个，正积累数据）
 - **缺口率 < 2%**（交易时段内应有 5m bar 数 vs 实际数）。
 - **对账**：自建 5m bar 与交易所 `history.json?range=1d` 的 close 差异 < 1e-9（同源应完全一致；若不等说明重建逻辑错）。
 - 时区：所有时间戳 UTC，跨 DST 切换日（如 2026-11-01 美国 DST 结束）无重复/缺失 bar。

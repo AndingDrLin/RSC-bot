@@ -180,12 +180,21 @@ function renderSystem(d) {
   const s = d.system;
   const age = s.collector_age_s;
   const alive = age !== null && age < 180;
+  const bars = s.bars || {};
+  const b5 = bars["1d"], b1h = bars["5d"], bd = bars["1y"];
+  const barText = (b) => (b ? `${nf(b.rows, 0)} 根 · ${b.symbols} 标的` : "—");
 
   $("sys").innerHTML = [
     ["行情采集", alive ? `<span class="ok">运行中 · ${ageText(age)}</span>`
                        : `<span class="danger">${ageText(age)}</span>`],
     ["今日快照", nf(s.ticks_today, 0)],
     ["报价记录", nf(s.quotes_rows, 0)],
+    ["自选池", s.watchlist_n
+      ? `${nf(s.quote_symbols_15m, 0)}/${s.watchlist_n} · 15 分钟内`
+      : "未配置"],
+    ["5 分钟 K", barText(b5)],
+    ["1 小时 K", barText(b1h)],
+    ["日线 K", barText(bd)],
     ["数据库", `${nf(s.db_mb, 1)} MB`],
     ["运行时长", `${Math.floor(s.uptime_s / 3600)}h ${Math.floor((s.uptime_s % 3600) / 60)}m`],
     ["刷新间隔", "5 秒"],

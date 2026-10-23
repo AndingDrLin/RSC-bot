@@ -6,6 +6,7 @@ import json
 import os
 import sqlite3
 import time
+from datetime import datetime
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -93,6 +94,27 @@ CREATE TABLE IF NOT EXISTS events (
   kind    TEXT,
   payload TEXT
 );
+
+-- K 线：来自 history.json。rng 是请求的 range（1d->5m、5d->1h、1y->1d），
+-- ts 为 UTC epoch 秒（at 字段是 UTC ISO8601，如 2026-10-23T15:20:00Z）。
+CREATE TABLE IF NOT EXISTS bars (
+  instrument_id INTEGER NOT NULL,
+  rng           TEXT    NOT NULL,
+  ts            INTEGER NOT NULL,
+  open          REAL,
+  high          REAL,
+  low           REAL,
+  close         REAL,
+  volume        REAL,
+  PRIMARY KEY (instrument_id, rng, ts)
+);
+CREATE INDEX IF NOT EXISTS idx_bars_ts ON bars(rng, ts);
+
+-- 采集器自己的状态（回补游标、自选池指纹等）
+CREATE TABLE IF NOT EXISTS meta (
+  k TEXT PRIMARY KEY,
+  v TEXT
+);
 """
 
 
@@ -156,6 +178,30 @@ class Store:
                          _f(d.get("pnl")), o.get("created_at")))
         self.conn.executemany("INSERT OR REPLACE INTO orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
 
+    def put_bars(self, instrument_id: int, rng: str, candles: list[dict]) -> int:
+        """写入 history.json 的 K 线；at 是 UTC ISO8601，转 epoch 秒。"""
+        rows = []
+        for c in candles or ():
+            ts = _iso_to_epoch(c.get("at"))
+            if ts is None:
+                continue
+            rows.append((instrument_id, rng, ts, _f(c.get("open")), _f(c.get("high")),
+                         _f(c.get("low")), _f(c.get("close")), _f(c.get("volume"))))
+        if rows:
+            self.conn.executemany("INSERT OR REPLACE INTO bars VALUES (?,?,?,?,?,?,?,?)", rows)
+        return len(rows)
+
+    def put_history_quote(self, ts: int, instrument_id: int, symbol: str, price) -> None:
+        """用 K 线收盘价补一条报价，让看板能看到自选池行情。
+        prev_close 故意留空：history 没有可靠的前收，乱填会让涨跌幅失真。"""
+        if price is None:
+            return
+        self.conn.execute(
+            "INSERT OR REPLACE INTO quotes (ts,instrument_id,symbol,price,source) "
+            "VALUES (?,?,?,?,'history')",
+            (ts, instrument_id, symbol, price),
+        )
+
     def put_portfolio(self, ts: int, wallet: dict, pf: dict):
         self.conn.execute(
             "INSERT OR REPLACE INTO portfolio VALUES (?,?,?,?,?,?,?)",
@@ -178,6 +224,49 @@ class Store:
     def last_tick_ts(self) -> int | None:
         r = self.conn.execute("SELECT MAX(ts) FROM quotes").fetchone()
         return r[0] if r else None
+
+    def bar_last_ts(self, instrument_id: int, rng: str) -> int | None:
+        r = self.conn.execute(
+            "SELECT MAX(ts) FROM bars WHERE instrument_id=? AND rng=?", (instrument_id, rng)
+        ).fetchone()
+        return r[0] if r else None
+
+    def bar_stats(self) -> dict:
+        try:
+            rows = self.conn.execute(
+                "SELECT rng, COUNT(*), COUNT(DISTINCT instrument_id), MAX(ts) "
+                "FROM bars GROUP BY rng"
+            ).fetchall()
+        except sqlite3.Error:
+            return {}
+        return {r[0]: {"rows": r[1], "symbols": r[2], "last_ts": r[3]} for r in rows}
+
+    def checkpoint(self, mode: str = "TRUNCATE") -> None:
+        """把 WAL 写回主库。不做的话 market.db 只有几 KB，单独 cp 出来是空库。"""
+        self.conn.commit()
+        try:
+            self.conn.execute(f"PRAGMA wal_checkpoint({mode})")
+        except sqlite3.Error:
+            pass
+
+
+def db_size_mb(path: str) -> float:
+    """数据库总占用：主库 + WAL + SHM（看板一直显示 0.0 就是只算了主库）。"""
+    total = 0
+    for suffix in ("", "-wal", "-shm"):
+        p = path + suffix
+        if os.path.exists(p):
+            total += os.path.getsize(p)
+    return total / 1e6
+
+
+def _iso_to_epoch(s) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
 
 
 def _f(v):

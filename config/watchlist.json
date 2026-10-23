@@ -1,0 +1,37 @@
+{
+  "_note": "自选池（Tier B）。collector 每 tier_b_interval_s 拉一次 1d/5m K 线，同时刷新看板报价。必须覆盖 docs/03 §3 验收的 10 类市场、每类 >=4 个。改完重启 collector 生效。",
+  "interval_s": 300,
+  "backfill": {
+    "5d": 21600,
+    "1y": 172800
+  },
+  "symbols": [
+    "NASDAQ:AAPL", "NASDAQ:MSFT", "NASDAQ:NVDA", "NASDAQ:TSLA",
+    "NASDAQ:AMZN", "NASDAQ:META", "NASDAQ:GOOGL", "NASDAQ:AMD",
+
+    "SSE:600519", "SSE:601318", "SSE:600036", "SZSE:000858",
+    "SZSE:300750", "SZSE:002594",
+
+    "TSE:7203", "TSE:6758", "TSE:8306", "TSE:9984",
+    "TSE:8035", "TSE:6861",
+
+    "HKEX:0700", "HKEX:9988", "HKEX:3690", "HKEX:0005",
+    "HKEX:1299", "HKEX:1810",
+
+    "AMS:ASML", "XETRA:SAP", "XETRA:SIE", "EPA:MC",
+    "SIX:NESN", "SIX:NOVN",
+
+    "SGX:D05", "SGX:O39", "SGX:U11", "SGX:Z74",
+    "SGX:C6L", "SGX:S68",
+
+    "CRYPTO:BTC/USD", "CRYPTO:ETH/USD", "CRYPTO:SOL/USD",
+    "CRYPTO:XRP/USD", "CRYPTO:ADA/USD", "CRYPTO:DOGE/USD",
+
+    "INDEX:SPX", "INDEX:NDX", "INDEX:DJI", "INDEX:HSI",
+    "INDEX:N225", "INDEX:DAX",
+
+    "FX:EUR", "FX:JPY", "FX:GBP", "FX:CHF", "FX:AUD", "FX:CNY",
+
+    "AMEX:GLD", "AMEX:SLV", "AMEX:PPLT", "AMEX:PALL"
+  ]
+}
