@@ -39,6 +39,7 @@ RUN pip install --no-cache-dir -i ${PIP_INDEX} -r requirements.txt
 
 COPY src ./src
 COPY config ./config
+COPY tests ./tests
 COPY README.md ./
 
 RUN mkdir -p /app/data

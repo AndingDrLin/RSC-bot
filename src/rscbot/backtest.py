@@ -100,9 +100,21 @@ class SmaCross(Strategy):
         return []
 
 
+def _size(price: float, notional: float, meta: dict) -> float:
+    """按目标名义价值算数量，并对齐交易所的最小步长。"""
+    q = notional / price if price else 0.0
+    step = float(meta.get("step") or 0.0)
+    if step > 0:
+        q = round(q / step) * step
+        q = max(step, q)
+    minimum = float(meta.get("minimum") or 0.0)
+    return max(minimum, q)
+
+
 def run(bars_by_symbol: dict[str, list[Bar]], strategy: Strategy, cash: float = 1000.0,
         leverage: float = 1.0, fee_bps: dict[str, float] | None = None,
-        quantity: float = 1.0, max_drift: float | None = None) -> dict:
+        quantity: float = 1.0, max_drift: float | None = None,
+        notional: float | None = None, meta: dict[str, dict] | None = None) -> dict:
     """把所有标的的 bar 按时间戳归并成一条事件流，逐根撮合。"""
     fee_bps = fee_bps or {}
     broker = PaperBroker(cash) if max_drift is None else PaperBroker(cash, max_drift)
@@ -128,14 +140,16 @@ def run(bars_by_symbol: dict[str, list[Bar]], strategy: Strategy, cash: float = 
         for sym in bars_by_symbol:
             if not closes[sym] or (cursor[sym] == 0):
                 continue
+            qty = (quantity if notional is None
+                   else _size(prices[sym], notional, (meta or {}).get(sym, {})))
             for intent in strategy.on_bar(ts, sym, closes[sym]):
                 act = intent.get("action")
                 try:
                     if act == "long" and sym not in broker.positions:
-                        broker.open(ts, sym, "long", quantity, prices[sym], leverage,
+                        broker.open(ts, sym, "long", qty, prices[sym], leverage,
                                     fee_bps.get(sym, 0.0))
                     elif act == "short" and sym not in broker.positions:
-                        broker.open(ts, sym, "short", quantity, prices[sym], leverage,
+                        broker.open(ts, sym, "short", qty, prices[sym], leverage,
                                     fee_bps.get(sym, 0.0))
                     elif act == "close" and sym in broker.positions:
                         broker.close(ts, sym, prices[sym], reason="signal")
@@ -211,13 +225,17 @@ def main() -> int:
     ap.add_argument("--slow", type=int, default=30)
     ap.add_argument("--cash", type=float, default=1000.0)
     ap.add_argument("--leverage", type=float, default=1.0)
-    ap.add_argument("--quantity", type=float, default=1.0, help="每次开仓的数量（指数/ETF 用 1 份）")
+    ap.add_argument("--quantity", type=float, default=None,
+                    help="每次开仓的固定数量；给了就忽略 --notional")
+    ap.add_argument("--notional", type=float, default=100.0,
+                    help="每次开仓的目标名义价值（RSC），按最小步长取整；默认 100 即 10%% 仓位")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
     syms = [s.strip() for s in args.symbol.split(",") if s.strip()]
     bars = {}
     fees = {}
+    metas = {}
     for s in syms:
         b = load_bars(args.db, s, args.rng)
         if not b:
@@ -225,6 +243,7 @@ def main() -> int:
             continue
         bars[s] = b
         meta = instrument_meta(args.db, s)
+        metas[s] = meta
         fees[s] = meta.get("fee_bps") or 0.0
         if args.leverage > (meta.get("max_leverage") or 1.0):
             print(f"{s}: 杠杆 {args.leverage} 超过上限 {meta.get('max_leverage')}",
@@ -232,7 +251,9 @@ def main() -> int:
     if not bars:
         return 2
     res = run(bars, SmaCross(args.fast, args.slow), cash=args.cash,
-              leverage=args.leverage, fee_bps=fees, quantity=args.quantity)
+              leverage=args.leverage, fee_bps=fees,
+              quantity=args.quantity if args.quantity is not None else 1.0,
+              notional=None if args.quantity is not None else args.notional, meta=metas)
     if args.json:
         print(json.dumps({k: v for k, v in res.items() if k != "snapshots"},
                          ensure_ascii=False, indent=1))
