@@ -77,6 +77,7 @@ class BarPoller:
         self.queue: deque[tuple[str, str]] = deque()
         self.tries: dict[tuple[str, str], int] = {}
         self.cool_until = 0.0                  # 被 429 打回后的全局冷却
+        self.calls = 0                         # take() 计数，用于 4:1 穿插回补
         self.seeded = False
         self.stats = {"bars": 0, "ok": 0, "errors": 0, "backfill": 0,
                       "archived": 0, "fresh": 0, "recovered": 0}
@@ -128,16 +129,22 @@ class BarPoller:
 
     # ── 调度 ────────────────────────────────────────────
     def take(self, now: float | None = None) -> tuple[str, str] | None:
-        """取下一个该做的请求：先 Tier B（最久没刷的），再回补。"""
+        """取下一个该做的请求：Tier B 为主，每 4 个请求让 1 个给回补队列。
+
+        池子涨到 98 个标的后，5 分钟一轮就要 19.6 req/min，不预留额度回补队列
+        永远轮不到（97 个回补请求会一直挂着），所以按 4:1 强制穿插。
+        """
         now = time.time() if now is None else now
         if now < self.cool_until:
             return None
         due = [(t, sym) for sym, t in self.next_at.items() if t <= now]
         if due:
             due.sort()
-            return due[0][1], "1d"
-        if self.queue:
+        self.calls += 1
+        if self.queue and (self.calls % 4 == 0 or not due):
             return self.queue.popleft()
+        if due:
+            return due[0][1], "1d"
         return None
 
     def next_due(self, now: float | None = None) -> float | None:
