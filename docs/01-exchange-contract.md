@@ -80,6 +80,8 @@ User-Agent: <桌面 Chrome UA>
 返回：`{"candles":[{at,open,high,low,close,volume}], "currency", "updated_at"}`，`at` 为 UTC ISO8601。
 **没有逐笔成交、没有盘口深度**（crypto 的 bid/ask 只在 `state.json` 的 `quote` 里）。
 
+> **归档（archived）**：一部分标的返回 `"archived": true` + 几个月前的旧 K 线（2026-10-23 实测：CN/HK/JP/SG/EU 里约一半，如 `TSE:7203` 只到 2026-07-17、`INDEX:DAX` 只到 2026-07-14），而同一标的在 `state.json` 里的 `quote.received_at`/sparkline 仍在更新。归档会自愈（`AMEX:PPLT` 30 分钟后恢复成当天的 5m 线），所以客户端应降频复查而不是放弃。判断"活"的口径：`archived is not True` 且最后一根 K 线距今 < 72h。
+
 ### 3.3 下单（核心）
 
 ```

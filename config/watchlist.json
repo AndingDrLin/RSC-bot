@@ -1,6 +1,7 @@
 {
-  "_note": "自选池（Tier B）。collector 每 tier_b_interval_s 拉一次 1d/5m K 线，同时刷新看板报价。必须覆盖 docs/03 §3 验收的 10 类市场、每类 >=4 个。改完重启 collector 生效。",
+  "_note": "自选池（Tier B）。collector 每 interval_s 拉一次 1d/5m K 线，同时刷新看板报价。核心池必须覆盖 docs/03 §3 验收的 10 类市场、每类 >=4 个。candidates 是同一批市场的候选标的：交易所的 history.json 对部分标的只返回归档数据（archived=true，几个月前），这类会自动降到 slow_interval_s 复查；候选池补上额度，一旦某标的的归档恢复，它的 K 线直接进库。改完重启 collector 生效。",
   "interval_s": 300,
+  "slow_interval_s": 1800,
   "backfill": {
     "5d": 21600,
     "1y": 172800
@@ -33,5 +34,21 @@
     "FX:EUR", "FX:JPY", "FX:GBP", "FX:CHF", "FX:AUD", "FX:CNY",
 
     "AMEX:GLD", "AMEX:SLV", "AMEX:PPLT", "AMEX:PALL"
+  ],
+  "candidates": [
+    "EURONEXT:ASML", "EURONEXT:AIR", "XETRA:DRM3", "LSE:HSBA", "LSE:BARC", "EPA:CS",
+
+    "HKEX:0388", "HKEX:2318", "HKEX:0939", "HKEX:1211",
+    "SSE:601888", "SSE:600030", "SSE:601012",
+    "SZSE:000001", "SZSE:002415", "SZSE:300059",
+    "TSE:7267", "TSE:9432", "TSE:6501", "TSE:4063",
+
+    "INDEX:TSX", "INDEX:STOXX50", "INDEX:RUT", "INDEX:FTSE100", "INDEX:CAC40",
+
+    "NASDAQ:SNDK", "NASDAQ:QQQ", "NASDAQ:MU", "NASDAQ:PDD", "AMEX:SPY",
+
+    "CRYPTO:XMR/USD", "CRYPTO:NEAR/USD", "CRYPTO:AAVE/USD", "CRYPTO:BCH/USD",
+
+    "FX:HKD", "FX:SGD", "FX:NZD", "FX:CAD"
   ]
 }

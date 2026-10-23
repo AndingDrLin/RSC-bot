@@ -192,6 +192,9 @@ function renderSystem(d) {
     ["自选池", s.watchlist_n
       ? `${nf(s.quote_symbols_15m, 0)}/${s.watchlist_n} · 15 分钟内`
       : "未配置"],
+    ["活标的", s.watchlist_n
+      ? `<span class="ok">${nf(s.bars_live_1d, 0)}</span>/${s.watchlist_n + (s.candidates_n || 0)} · 24h 内有 K 线`
+      : "—"],
     ["5 分钟 K", barText(b5)],
     ["1 小时 K", barText(b1h)],
     ["日线 K", barText(bd)],

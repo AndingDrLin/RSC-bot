@@ -160,9 +160,18 @@ def build_summary() -> dict:
     }
     fresh = rows("SELECT COUNT(DISTINCT instrument_id) AS c FROM quotes WHERE ts >= ?",
                  (int(time.time()) - 900,))
+    # 活标的：1d 最后一根在 24h 内（交易所对部分标的一直返回几个月前的归档 K 线）
+    bars_live = rows(
+        "SELECT COUNT(*) AS c FROM (SELECT instrument_id, MAX(ts) AS m FROM bars "
+        "WHERE rng = '1d' GROUP BY instrument_id) WHERE m >= ?",
+        (int(time.time()) - 86400,),
+    )
     watchlist_n = 0
+    candidates_n = 0
     try:
-        watchlist_n = len(json.loads(WATCHLIST.read_text(encoding="utf-8")).get("symbols") or [])
+        wl = json.loads(WATCHLIST.read_text(encoding="utf-8"))
+        watchlist_n = len(wl.get("symbols") or [])
+        candidates_n = len(wl.get("candidates") or [])
     except (OSError, ValueError):
         pass
 
@@ -192,7 +201,9 @@ def build_summary() -> dict:
             "ticks_today": (ticks_today[0]["c"] if ticks_today else 0),
             "quotes_rows": (n_quotes[0]["c"] if n_quotes else 0),
             "bars": bars,
+            "bars_live_1d": (bars_live[0]["c"] if bars_live else 0),
             "watchlist_n": watchlist_n,
+            "candidates_n": candidates_n,
             "quote_symbols_15m": (fresh[0]["c"] if fresh else 0),
             "db_mb": round(db_mb, 1),
             "uptime_s": int(time.time() - STARTED),

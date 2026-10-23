@@ -23,8 +23,8 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from rscbot.client import Client  # noqa: E402
-from rscbot.poller import BarPoller, load_watchlist  # noqa: E402
-from rscbot.store import Store  # noqa: E402
+from rscbot.poller import FRESH_MAX_AGE, BarPoller, load_watchlist  # noqa: E402
+from rscbot.store import Store, _iso_to_epoch  # noqa: E402
 
 log = logging.getLogger("rscbot.collector")
 _stop = False
@@ -71,8 +71,12 @@ def market_tick(c: Client, store: Store, args, last_full: float) -> tuple[float,
     return last_full, len(s.get("instruments", [])), full_js
 
 
-def bar_request(c: Client, store: Store, poller: BarPoller, symbol: str, rng: str) -> bool:
-    """拉一个标的的一个 range，写 bars（1d 额外补一条报价给看板）。"""
+def bar_request(c: Client, store: Store, poller: BarPoller, symbol: str, rng: str) -> str:
+    """拉一个标的的一个 range，写 bars（1d 额外补一条报价给看板）。
+
+    返回 "fresh" / "archived"：交易所对一部分标的只给归档 K 线（几个月前），
+    这类要降频复查而不是当成成功或失败。
+    """
     iid = poller.ids[symbol]
     t0 = time.time()
     js = c.history(iid, rng)
@@ -84,9 +88,14 @@ def bar_request(c: Client, store: Store, poller: BarPoller, symbol: str, rng: st
             store.put_history_quote(int(t0), iid, symbol, px)
     store.commit()
     poller.stats["bars"] += n
+    age = t0 - _iso_to_epoch(candles[-1]["at"]) if candles else None
+    stale = js.get("archived") is True or (age is not None and age > FRESH_MAX_AGE)
+    if rng == "1d" and stale:
+        poller.archived(symbol, rng)
+        return "archived"
     poller.done(symbol, rng)
     log.debug("bars %s %s: %d rows (%.1fs)", symbol, rng, n, time.time() - t0)
-    return True
+    return "fresh"
 
 
 def main() -> int:
@@ -159,7 +168,8 @@ def main() -> int:
                     try:
                         bar_request(c, store, poller, act[0], act[1])
                     except Exception as e:  # noqa: BLE001
-                        poller.fail(act[0], act[1])
+                        msg = str(e)
+                        poller.fail(act[0], act[1], cool=65.0 if "429" in msg else 0.0)
                         log.warning("bar %s %s failed: %s", act[0], act[1], e)
                     next_bar = time.time() + args.bar_gap
                 elif poller.queue:

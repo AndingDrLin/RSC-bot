@@ -69,12 +69,12 @@ flowchart LR
 | 任务 | 状态 | 说明 |
 |---|---|---|
 | M2-T1 标的目录 | **完成** | 全量 `state.json` 每 30 min 刷新 `instruments`（1638 条），比计划的每日 1 次更频繁 |
-| M2-T2 分层轮询 | **完成** | [poller.py](../src/rscbot/poller.py) + [collector.py](../src/rscbot/collector.py)：Tier A 60s / Tier B 5min（60 标的摊平到 300s）/ Tier C 回补 |
-| M2-T7 回补 | **完成** | 启动时按 `bars` 最新时间判断过期，队列化补 `1y` 日线 + `5d` 小时线，失败 3 次放弃 |
+| M2-T2 分层轮询 | **完成** | [poller.py](../src/rscbot/poller.py) + [collector.py](../src/rscbot/collector.py)：Tier A 60s / Tier B 5min（60 核心标的摊平到 300s）/ 候选池 38 个同节奏试跑 / Tier C 回补；归档标的自动降到 30 min 复查，429 触发 65s 全局冷却 |
+| M2-T7 回补 | **完成** | 启动时按 `bars` 最新时间判断过期，队列化补 `1y` 日线 + `5d` 小时线，失败 5 次放弃（1d 失败只降频不丢标的） |
 | M2-T3 K 线重建 | **部分** | 直接用交易所 5m/1h/1d K 线落库（不复算）；缺口标记未做，时间戳本身已是 UTC |
 | M2-T4 存储层 | **未做** | 仍是 SQLite WAL，未上 Parquet/DuckDB |
 | M2-T5 交易日历 | **未做** | — |
-| M2-T6 数据质量 | **未做** | 目前只有 `bars` 覆盖计数（看板"运行状态"） |
+| M2-T6 数据质量 | **部分** | `bars_live_1d`（24h 内有 K 线的标的数）进看板；归档标的计数在 collector 的 `pipeline:` 日志里 |
 
 ### 验收（DoD）
 - `docker compose up` 后 5 个服务全部 healthy，`curl /healthz` 返回 200。
@@ -129,7 +129,8 @@ flowchart LR
 | M2-T7 | 回补任务：收盘后按需补 `1y` 日线 + `5d` 小时线，幂等 | `backfill` | 1.0 |
 
 ### 验收
-- 覆盖：≥ 60 个标的（10 类市场各 ≥ 4）× 5 个交易日。（当前配置 60 个，正积累数据）
+- 覆盖：≥ 60 个标的（10 类市场各 ≥ 4）× 5 个交易日。（当前 60 个核心 + 38 个候选，正积累数据）
+  - **已知数据源限制（2026-10-23 实测）**：`history.json` 对一部分标的返回 `archived: true` + 几个月前的旧 K 线（CN/HK/JP/SG/EU 尤甚），同时 `state.json` 的 sparkline 仍在更新。首批 60 个标的里当时只有 29 个是活数据；归档会自愈（AMEX:PPLT 半小时后恢复），所以按 30 min 复查 + 候选池补位处理。验收时以 `bars_live_1d` 口径统计，并记录交易所侧归档比例。
 - **缺口率 < 2%**（交易时段内应有 5m bar 数 vs 实际数）。
 - **对账**：自建 5m bar 与交易所 `history.json?range=1d` 的 close 差异 < 1e-9（同源应完全一致；若不等说明重建逻辑错）。
 - 时区：所有时间戳 UTC，跨 DST 切换日（如 2026-11-01 美国 DST 结束）无重复/缺失 bar。
