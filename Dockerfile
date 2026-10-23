@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1
+# 注意：不要写 `# syntax=docker/dockerfile:1`。
+# 该声明会让 BuildKit 去 docker.io 拉取 frontend 镜像，国内网络会超时失败。
+# 本项目只使用标准指令，内置前端完全够用。
 #
 # 国内网络默认全走镜像源；海外网络可用 --build-arg 覆盖。
 #   docker build --build-arg BASE_IMAGE=python:3.12-slim .

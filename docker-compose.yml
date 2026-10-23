@@ -9,6 +9,8 @@ services:
         APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
         PIP_INDEX: ${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
     image: rsc-bot:latest
+    # 强制本地构建，避免 compose 去 Docker Hub 拉取不存在的 rsc-bot 镜像
+    pull_policy: build
     container_name: rsc-web
     restart: unless-stopped
     ports:
@@ -28,6 +30,8 @@ services:
 
   collector:
     image: rsc-bot:latest
+    # 复用 web 构建出的本地镜像，不做远程拉取
+    pull_policy: never
     container_name: rsc-collector
     restart: unless-stopped
     depends_on:
