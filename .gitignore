@@ -1,0 +1,48 @@
+# ── 密钥与凭证 ────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+sessions/
+cookies.txt
+
+# ── 数据 ──────────────────────────────────────────────
+data/
+state/
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# ── 运行产物 ──────────────────────────────────────────
+logs/
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ── 编辑器/系统 ──────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ── 本次调研的临时目录（含会话 cookie，禁止入库）────
+.explore/
+
+# ── SQLite 运行时文件 ───────────────────────────────
+*.db
+*.db-wal
+*.db-shm

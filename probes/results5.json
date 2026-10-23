@@ -1,0 +1,42 @@
+{
+ "P2 set tp/sl (valid)": {
+  "http": 200,
+  "body": {
+   "position_id": 525,
+   "replayed": false
+  }
+ },
+ "P3 tp below breakeven": {
+  "http": 422,
+  "body": {
+   "errors": [
+    "Invalid protection."
+   ],
+   "error_code": "invalid_protection"
+  }
+ },
+ "P4 sl beyond liquidation": {
+  "http": 422,
+  "body": {
+   "errors": [
+    "Stop-loss must trigger before the liquidation price."
+   ],
+   "error_code": "stop_loss_beyond_liquidation"
+  }
+ },
+ "P5 clear tp/sl": {
+  "http": 200,
+  "body": {
+   "position_id": 525,
+   "replayed": false
+  }
+ },
+ "P6 close": {
+  "http": 200,
+  "body": {
+   "order_id": 5591,
+   "status": "pending",
+   "replayed": false
+  }
+ }
+}

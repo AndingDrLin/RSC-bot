@@ -1,0 +1,303 @@
+[
+ {
+  "case": "C1a first order",
+  "expect": "accepted",
+  "http": 200,
+  "got": "pending",
+  "body": {
+   "order_id": 5586,
+   "status": "pending",
+   "replayed": false
+  },
+  "note": ""
+ },
+ {
+  "case": "C1b replay same rid",
+  "expect": "replayed=true same id",
+  "http": 200,
+  "got": "pending",
+  "body": {
+   "status": "pending",
+   "order_id": 5586,
+   "replayed": true
+  },
+  "note": "id1=5586 id2=5586"
+ },
+ {
+  "case": "C2 leverage=max+1",
+  "expect": "rejected",
+  "http": 422,
+  "got": "invalid_order",
+  "body": {
+   "errors": [
+    "Invalid order."
+   ],
+   "error_code": "invalid_order"
+  },
+  "note": ""
+ },
+ {
+  "case": "C3 qty below minimum",
+  "expect": "rejected",
+  "http": 422,
+  "got": "invalid_quantity",
+  "body": {
+   "errors": [
+    "Invalid quantity."
+   ],
+   "error_code": "invalid_quantity"
+  },
+  "note": ""
+ },
+ {
+  "case": "C4 market closed",
+  "expect": "rejected",
+  "http": 409,
+  "got": "market_closed",
+  "body": {
+   "errors": [
+    "Market closed."
+   ],
+   "error_code": "market_closed"
+  },
+  "note": ""
+ },
+ {
+  "case": "C5 close_only open",
+  "expect": "rejected",
+  "http": 409,
+  "got": "quote_stale",
+  "body": {
+   "errors": [
+    "Quote stale."
+   ],
+   "error_code": "quote_stale"
+  },
+  "note": ""
+ },
+ {
+  "case": "C6a fx order",
+  "expect": "pending",
+  "http": 409,
+  "got": "position_conflict",
+  "body": {
+   "errors": [
+    "Position conflict."
+   ],
+   "error_code": "position_conflict"
+  },
+  "note": ""
+ },
+ {
+  "case": "C6d cancel no rid",
+  "expect": "400 missing param",
+  "http": 400,
+  "got": "http400",
+  "body": {
+   "errors": [
+    "您为请求提供了无效参数：id"
+   ],
+   "error_type": "invalid_parameters"
+  },
+  "note": ""
+ },
+ {
+  "case": "C7a opposite side",
+  "expect": "rejected",
+  "http": 409,
+  "got": "position_conflict",
+  "body": {
+   "errors": [
+    "Position conflict."
+   ],
+   "error_code": "position_conflict"
+  },
+  "note": ""
+ },
+ {
+  "case": "C7b add diff leverage",
+  "expect": "rejected",
+  "http": 409,
+  "got": "position_conflict",
+  "body": {
+   "errors": [
+    "Position conflict."
+   ],
+   "error_code": "position_conflict"
+  },
+  "note": ""
+ },
+ {
+  "case": "C8a set tp/sl",
+  "expect": "ok",
+  "http": 400,
+  "got": "http400",
+  "body": {
+   "errors": [
+    "param is missing or the value is empty or invalid: request_id"
+   ]
+  },
+  "note": ""
+ },
+ {
+  "case": "C8b tp < breakeven",
+  "expect": "rejected",
+  "http": 400,
+  "got": "http400",
+  "body": {
+   "errors": [
+    "param is missing or the value is empty or invalid: request_id"
+   ]
+  },
+  "note": ""
+ },
+ {
+  "case": "C8c clear tp/sl",
+  "expect": "ok",
+  "http": 400,
+  "got": "http400",
+  "body": {
+   "errors": [
+    "param is missing or the value is empty or invalid: request_id"
+   ]
+  },
+  "note": ""
+ },
+ {
+  "case": "C9 refresh quote",
+  "expect": "ok",
+  "http": 200,
+  "got": "OK",
+  "body": {
+   "instrument": {
+    "id": 2455,
+    "symbol": "FX:JPY",
+    "display_symbol": "JPY",
+    "exchange": "FX",
+    "currency": "USD",
+    "name": "Japanese Yen",
+    "category": "forex",
+    "quote": {
+     "low": "0.006362942224484601",
+     "high": "0.006407299195243221",
+     "open": "0.006380643719092783",
+     "price": "0.006393780130688865",
+     "source": "yahoo",
+     "fx_rate": "1.0",
+     "local_price": "0.006393780130688865",
+     "received_at": "2026-10-23T12:59:38.999322Z",
+     "session_end": "2026-10-23T22:59:00Z",
+     "source_time": "2026-10-23T12:59:37Z",
+     "change_basis": "previous_close",
+     "inverse_rate": "156.402",
+     "base_currency": "JPY",
+     "delay_seconds": 0,
+     "session_start": "2026-10-22T23:00:00Z",
+     "delay_reported": false,
+     "local_currency": "USD",
+     "previous_close": "0.006378568011481422",
+     "pricing_method": "fx_reciprocal_v1",
+     "delay_observations": []
+    },
+    "market_closed": false,
+    "minimum_notional": null,
+    "execution_prices": {
+     "long": "0.006393780130688865",
+     "short": "0.006393780130688865"
+    },
+    "popularity": 60,
+    "last_order_at": "2026-10-23T12:31:43.713Z",
+    "catalog_rank": 3,
+    "catalog_id": 2455,
+    "fee_bps": 1,
+    "fx_activity": true,
+    "margin_budget_exempt": true,
+    "max_leverage": 100,
+    "currency_name": "日元",
+    "close_only": false,
+    "execution_mode": "forex_confirmation",
+    "history": [
+     {
+      "at": "2026-10-23T12:44:59Z",
+      "price": "0.00639055220761626"
+     },
+     {
+      "at": "2026-10-23T12:46:01Z",
+      "price": "0.006389653872449729"
+     },
+     {
+      "at": "2026-10-23T12:47:03Z",
+      "price": "0.006391328245836049"
+     },
+     {
+      "at": "2026-10-23T12:48:03Z",
+      "price": "0.006393616613173407"
+     },
+     {
+      "at": "2026-10-23T12:49:03Z",
+      "price": "0.006393003496972912"
+     },
+     {
+      "at": "2026-10-23T12:50:04Z",
+      "price": "0.006393657491768165"
+     },
+     {
+      "at": "2026-10-23T12:51:05Z",
+      "price": "0.006393044367727912"
+     },
+     {
+      "at": "2026-10-23T12:52:01Z",
+      "price": "0.006395170367338585"
+     },
+     {
+      "at": "2026-10-23T12:53:05Z",
+      "price": "0.006395865712403502"
+     },
+     {
+      "at": "2026-10-23T12:54:05Z",
+      "price": "0.006395456667583348"
+     },
+     {
+      "at": "2026-10-23T12:55:02Z",
+      "price": "0.006395947527646483"
+     },
+     {
+      "at": "2026-10-23T12:56:05Z",
+      "price": "0.006395211265804165"
+     },
+     {
+      "at": "2026-10-23T12:57:06Z",
+      "price": "0.00639480230468675"
+     },
+     {
+      "at": "2026-10-23T12:58:09Z",
+      "price": "0.006392022755601009"
+     },
+     {
+      "at": "2026-10-23T12:59:09Z",
+      "price": "0.006393453104021482"
+     },
+     {
+      "at": "2026-10-23T12:59:37Z",
+      "price": "0.006393780130688865"
+     }
+    ],
+    "minimum": "0.01",
+    "step": "0.01"
+   }
+  },
+  "note": ""
+ },
+ {
+  "case": "C10 close position",
+  "expect": "ok",
+  "http": 200,
+  "got": "pending",
+  "body": {
+   "order_id": 5587,
+   "status": "pending",
+   "replayed": false
+  },
+  "note": ""
+ }
+]

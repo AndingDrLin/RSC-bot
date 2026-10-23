@@ -1,0 +1,188 @@
+# 交易所规则字典（机器可读）
+# 来源：river-side.cc 实测 + 论坛规则帖 topic 28918 + 插件源码 rsc.js
+# 所有数值均为 2026-10-23 快照；改版时只改本文件，不改代码。
+# schema: config/rules.schema.json（M0-T5 产出）
+
+meta:
+  version: "2026.10.23"
+  source:
+    - "https://river-side.cc/t/28918"
+    - "https://river-side.cc/rsc/state.json"
+    - "实测 2026-10-23"
+  note: "RSC 为虚拟积分，价格锚定 USD；本文件只描述约束，不含任何密钥。"
+
+# ── 账户 ────────────────────────────────────────────────
+account:
+  currency: RSC
+  daily_reward: 10.0
+  settlement_utc: "18:00"
+
+# ── 规则（14 条，risk/rules.py 逐条实现，缺一即测试失败）──
+rules:
+  - id: R01
+    name: leverage_limit
+    desc: 普通品种 1–10x；虚拟币与外汇最高 100x；超过 max_leverage 直接拒绝
+    severity: reject
+    params:
+      default_max: 10
+      overrides: {crypto: 100, forex: 100}
+      min: 1
+      integer_only: true
+
+  - id: R02
+    name: high_risk_budget
+    desc: 杠杆 > 10x 的持仓与待成交开仓，共用账户权益 25% 的初始保证金
+    severity: reject
+    params:
+      margin_percent: 25
+      applies_when: "leverage > 10"
+      # 实测字段：state.high_risk.budget.{equity,maximum_margin,used_margin,available_margin}
+
+  - id: R03
+    name: no_dual_position
+    desc: 同一标的不允许同时持有多头与空头
+    severity: reject
+    params: {scope: instrument}
+
+  - id: R04
+    name: add_position_same_leverage
+    desc: 加仓必须同方向、同杠杆；换向或换杠杆必须先平仓
+    severity: reject
+    params: {scope: instrument}
+
+  - id: R05
+    name: pending_order_limit
+    desc: 同品种最多 1 笔待成交；个人合计最多 10 笔待成交
+    severity: reject
+    params: {per_instrument: 1, total: 10}
+
+  - id: R06
+    name: quantity_step
+    desc: 最小数量 crypto 0.000001，其余 0.01；数量必须是 step 的整数倍
+    severity: reject
+    params:
+      min_quantity: {crypto: "0.000001", default: "0.01"}
+      step_source: "instrument.step"
+
+  - id: R07
+    name: stock_min_notional
+    desc: 股票开仓名义金额不得低于 1 RSC
+    severity: reject
+    params: {min_notional_rsc: 1.0, applies_to: [us, hk, cn, jp, eu, sg]}
+
+  - id: R08
+    name: trading_session
+    desc: 非虚拟币必须在对应市场时段内开/平仓；close_only 品种只可平仓
+    severity: reject
+    params:
+      # 从 quote.session_start/session_end 读取，禁止硬编码；以下仅为展示基线（UTC）
+      baseline_utc:
+        NYSE: ["13:30", "20:00"]
+        NASDAQ: ["13:30", "20:00"]
+        AMEX: ["13:30", "20:00"]
+        XETRA: ["07:00", "15:30"]
+        LSE: ["07:00", "15:30"]
+        HKEX: ["01:30", "08:10"]
+        SSE: ["01:30", "07:00"]
+        SZSE: ["01:30", "07:00"]
+        TSE: ["00:00", "06:30"]
+        SGX: ["01:00", "09:00"]
+      dst_aware: true
+      close_only_flag: "instrument.close_only"
+
+  - id: R09
+    name: fee_schedule
+    desc: 手续费按成交名义金额双边收取，费率见 fee_table
+    severity: info
+    params:
+      # bps（万分之一）
+      fee_table:
+        forex: 1
+        us: 5
+        indices: 5
+        metals: 5
+        hk: 10
+        jp: 10
+        eu: 10
+        sg: 10
+        cn: 10        # 7 只标的 13
+        crypto: 10    # 2 只标的 20
+      per_side: true
+      basis: gross_notional
+
+  - id: R10
+    name: liquidation
+    desc: 仓位权益 ≤ 保证金 25% 触发强平
+    severity: info
+    params:
+      maintenance_ratio: 0.25
+      formula_long: "avg * (1 - 0.75 / leverage)"
+      formula_short: "avg * (1 + 0.75 / leverage)"
+      # 实测校验：NVDA avg=199 lev=1 -> 49.75；QQQ 710.62 -> 177.655
+
+  - id: R11
+    name: stop_loss_ordering
+    desc: 止损价格必须早于强平价触发
+    severity: reject
+    params: {compare: "long: stop_loss > liquidation; short: stop_loss < liquidation"}
+
+  - id: R12
+    name: take_profit_breakeven
+    desc: 止盈必须覆盖手续费后的盈亏平衡价
+    severity: reject
+    params: {reference: "position.break_even"}
+
+  - id: R13
+    name: cancel_window
+    desc: 虚拟币成交前可撤；其他品种仅提交后 10 秒内可撤
+    severity: info
+    params: {crypto: "before_fill", others_seconds: 10, source_field: "cancel_until"}
+
+  - id: R14
+    name: rate_limit
+    desc: 行情/下单请求每分钟不超过 30 次
+    severity: reject
+    params:
+      orders_per_minute: 30
+      forecast_quote_per_minute: 12
+      forecast_confirm_per_minute: 10
+      transfers_per_day: 20
+      transfer_rsc_per_day: 300
+      enforcement: "client_side_token_bucket"   # 必须客户端先限，不能等服务端 429
+
+# ── 成交机制（不属于"规则"，但必须建模）────────────────
+execution_model:
+  order_type: market
+  limit_orders: false
+  fill_confirmation:
+    crypto: "wait_next_quote"
+    delayed_confirmation: "wait_next_update"
+    forex: "wait_next_quote"
+    immediate: "sync"
+  price_drift_reject_pct: 5.0
+  pending_reserve_extra_pct: 5.0
+  expiry_minutes: {crypto: 15, default: 30}
+  slippage_model: {distribution: normal, sigma_bps: 5.0, source: "calibrated_from_real_fills"}
+
+# ── 市场元数据（基线，运行时以 state.json 为准）──────────
+markets:
+  crypto:  {count: 27,  fee_bps: 10, max_leverage: 100, session: "24x7",  delay_s: 0}
+  forex:   {count: 12,  fee_bps: 1,  max_leverage: 100, session: "24x5",  delay_s: 0}
+  us:      {count: 518, fee_bps: 5,  max_leverage: 10,  session: "13:30-20:00Z", delay_s: 0}
+  eu:      {count: 318, fee_bps: 10, max_leverage: 10,  session: "07:00-15:30Z", delay_s: "mixed"}
+  cn:      {count: 307, fee_bps: 10, max_leverage: 10,  session: "01:30-07:00Z", delay_s: 904}
+  jp:      {count: 225, fee_bps: 10, max_leverage: 10,  session: "00:00-06:30Z", delay_s: 903}
+  hk:      {count: 181, fee_bps: 10, max_leverage: 10,  session: "01:30-08:10Z", delay_s: 903}
+  sg:      {count: 30,  fee_bps: 10, max_leverage: 10,  session: "01:00-09:00Z", delay_s: 606}
+  indices: {count: 16,  fee_bps: 5,  max_leverage: 10,  session: "per_index",  delay_s: 0}
+  metals:  {count: 4,   fee_bps: 5,  max_leverage: 10,  session: "us",         delay_s: 0}
+
+# ── 活动（时效性配置，过期后应删除）────────────────────
+events:
+  - key: fx-kurumi-2026
+    title: "FX 战士久留美 · Riverside 联动"
+    starts_at: "2026-10-22T20:22:56Z"
+    ends_at: "2026-12-17T18:00:00Z"
+    fee_bps: 1
+    max_leverage: 100
+    featured: [FX:JPY, FX:EUR, FX:GBP, FX:AUD, FX:CAD, FX:CHF]

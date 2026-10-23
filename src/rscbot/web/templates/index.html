@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSC Bot · 交易监控台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="logo">RSC</span>
+    <span class="name">Trading Bot</span>
+    <span class="pulse" id="pulse" title="行情快照心跳"></span>
+  </div>
+  <div class="headline" id="headline">正在连接数据源…</div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+
+<main>
+
+  <!-- 核心指标：权益 / 当日盈亏 / 浮动盈亏 / 仓位使用率 -->
+  <section class="kpis" id="kpis">
+    <div class="kpi">
+      <div class="kpi-label">账户权益</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-sub" id="kpi-total-sub">现金 + 未实现盈亏</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">当日盈亏</div>
+      <div class="kpi-value" id="kpi-day">—</div>
+      <div class="kpi-sub" id="kpi-day-sub">北京时间 00:00 起算</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">浮动盈亏</div>
+      <div class="kpi-value" id="kpi-unreal">—</div>
+      <div class="kpi-sub" id="kpi-unreal-sub">未平仓头寸按最新报价估值</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">仓位使用率</div>
+      <div class="kpi-value" id="kpi-exp">—</div>
+      <div class="kpi-sub" id="kpi-exp-sub">名义敞口 / 账户权益</div>
+    </div>
+  </section>
+
+  <section class="grid">
+
+    <!-- 持仓明细 -->
+    <div class="card span8">
+      <div class="card-head">
+        <h2>持仓明细 <span class="count" id="pos-count">0</span></h2>
+        <span class="hint">按浮动盈亏绝对值排序</span>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl" id="pos-table">
+          <thead>
+            <tr>
+              <th>标的</th>
+              <th>方向 / 杠杆</th>
+              <th class="num" title="未平仓头寸按最新报价计算的盈亏">浮动盈亏<span class="unit">RSC</span></th>
+              <th class="num" title="浮动盈亏 / 占用保证金">收益率</th>
+              <th class="num" title="持仓市值 / 账户权益">仓位占比</th>
+              <th class="num" title="现价与强平价的相对距离；数值越小，风险越高">距强平价</th>
+            </tr>
+          </thead>
+          <tbody id="pos-body"></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <span><i class="sw up"></i>盈利</span>
+        <span><i class="sw down"></i>亏损</span>
+        <span>强平触发条件：持仓权益 ≤ 占用保证金的 25%</span>
+      </div>
+    </div>
+
+    <!-- 行情速览 -->
+    <div class="card span4">
+      <div class="card-head">
+        <h2>行情速览</h2>
+        <span class="hint">近 24 小时涨跌幅</span>
+      </div>
+      <div class="movers" id="movers"></div>
+      <div class="legend">
+        <span><i class="sw up"></i>上涨</span>
+        <span><i class="sw down"></i>下跌</span>
+        <span class="badge-delay" title="该品种报价源延迟 15 分钟">延时</span>
+      </div>
+    </div>
+
+    <!-- 委托记录 -->
+    <div class="card span7">
+      <div class="card-head">
+        <h2>最近委托</h2>
+        <span class="hint">按创建时间倒序</span>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl compact" id="ord-table">
+          <thead>
+            <tr><th>时间</th><th>标的</th><th>方向</th><th class="num">数量</th><th>状态</th><th class="num">手续费</th></tr>
+          </thead>
+          <tbody id="ord-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 运行状态 -->
+    <div class="card span5">
+      <div class="card-head">
+        <h2>运行状态</h2>
+        <span class="hint" id="sys-hint">行情快照与采集任务</span>
+      </div>
+      <div class="sys" id="sys"></div>
+      <div class="card-head sub">
+        <h3>系统事件</h3>
+      </div>
+      <div class="events" id="events"></div>
+    </div>
+
+  </section>
+</main>
+
+<footer class="foot">
+  <span>RSC Bot · 论坛虚拟积分模拟交易，不涉及真实资金</span>
+  <span id="foot-ts">—</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

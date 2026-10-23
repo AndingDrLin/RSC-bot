@@ -1,0 +1,49 @@
+name: rsc-bot
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-docker.m.daocloud.io/library/python:3.12-slim}
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+        PIP_INDEX: ${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    image: rsc-bot:latest
+    container_name: rsc-web
+    restart: unless-stopped
+    ports:
+      # 左边是宿主机端口：0.0.0.0:8001 -> 局域网可访问
+      - "0.0.0.0:8001:8001"
+    environment:
+      TZ: Asia/Shanghai
+      RSC_DB: /app/data/market.db
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  collector:
+    image: rsc-bot:latest
+    container_name: rsc-collector
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Shanghai
+      RSC_DB: /app/data/market.db
+    volumes:
+      - ./data:/app/data
+    command: ["python", "-m", "rscbot.collector", "--minutes", "0"]
+    healthcheck:
+      disable: true
+
+networks:
+  default:
+    name: rsc-bot-net

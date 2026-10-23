@@ -1,0 +1,39 @@
+{
+ "F1 order FX:CNY": {
+  "http": 200,
+  "body": {
+   "order_id": 5589,
+   "status": "pending",
+   "replayed": false
+  },
+  "seconds": 1.57
+ },
+ "F2 cancel within window": {
+  "http": 200,
+  "body": {
+   "order_id": 5589,
+   "status": "canceled",
+   "replayed": false
+  },
+  "seconds": 0.97
+ },
+ "F3 cancel again": {
+  "http": 409,
+  "body": {
+   "errors": [
+    "Order not pending."
+   ],
+   "error_code": "order_not_pending"
+  },
+  "seconds": 1.11
+ },
+ "P1 order with tp/sl": {
+  "http": 200,
+  "body": {
+   "order_id": 5590,
+   "status": "pending",
+   "replayed": false
+  },
+  "seconds": 0.89
+ }
+}

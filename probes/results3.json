@@ -1,0 +1,181 @@
+{
+ "full_state": {
+  "http": 200,
+  "seconds": 6.29
+ },
+ "A1 set tp/sl": {
+  "http": 409,
+  "body": {
+   "errors": [
+    "Quote stale."
+   ],
+   "error_code": "quote_stale"
+  },
+  "seconds": 0.96
+ },
+ "A2 tp below breakeven": {
+  "http": 409,
+  "body": {
+   "errors": [
+    "Quote stale."
+   ],
+   "error_code": "quote_stale"
+  },
+  "seconds": 0.97
+ },
+ "A3 sl beyond liquidation": {
+  "http": 409,
+  "body": {
+   "errors": [
+    "Quote stale."
+   ],
+   "error_code": "quote_stale"
+  },
+  "seconds": 0.85
+ },
+ "A4 clear": {
+  "http": 409,
+  "body": {
+   "errors": [
+    "Quote stale."
+   ],
+   "error_code": "quote_stale"
+  },
+  "seconds": 0.97
+ },
+ "C0 refresh XETRA:DRM3": {
+  "http": 200,
+  "body": {
+   "instrument": {
+    "id": 52,
+    "symbol": "XETRA:DRM3",
+    "display_symbol": "DRM3",
+    "exchange": "XETRA",
+    "currency": "EUR",
+    "name": "Leverage Shares 3x Long Memory (DRAM) ETP",
+    "category": "eu",
+    "quote": {
+     "low": "1.882260596546310831",
+     "high": "1.992599237497196679",
+     "open": "1.958959384412609328",
+     "price": "1.882260596546310831",
+     "source": "yahoo",
+     "fx_rate": "1.121327651939896837",
+     "local_price": "1.6786",
+     "received_at": "2026-10-23T12:59:37.989940Z",
+     "session_end": "2026-10-23T15:30:00Z",
+     "source_time": "2026-10-23T12:44:24Z",
+     "change_basis": "previous_close",
+     "delay_seconds": 0,
+     "session_start": "2026-10-23T07:00:00Z",
+     "delay_reported": false,
+     "local_currency": "EUR",
+     "previous_close": "1.841780668311280555",
+     "delay_observations": [
+      {
+       "lag": 914,
+       "received_at": "2026-10-23T12:59:37.989940Z",
+       "source_time": "2026-10-23T12:44:24Z"
+      }
+     ]
+    },
+    "market_closed": false,
+    "minimum_notional": null,
+    "execution_prices": {
+     "long": "1.882260596546310831",
+     "short": "1.882260596546310831"
+    },
+    "popularity": 22,
+    "last_order_at": "2026-07-17T09:01:52.961Z",
+    "catalog_rank": null,
+    "catalog_id": 52,
+    "fee_bps": 10,
+    "fx_activity": false,
+    "margin_budget_exempt": false,
+    "max_leverage": 10,
+    "currency_name": null,
+    "close_only": true,
+    "execution_mode": "immediate",
+    "history": [
+     {
+      "at": "2026-10-21T09:32:56Z",
+      "price": "2.2459292532285233"
+     },
+     {
+      "at": "2026-10-21T11:12:55Z",
+      "price": "2.264464666891360521"
+     },
+     {
+      "at": "2026-10-21T12:30:08Z",
+      "price": "2.289916909948349426"
+     },
+     {
+      "at": "2026-10-21T15:35:46Z",
+      "price": "2.22042285200179937"
+     },
+     {
+      "at": "2026-10-22T08:00:32Z",
+      "price": "1.948556666292261035"
+     },
+     {
+      "at": "2026-10-22T09:07:15Z",
+      "price": "1.958314606741573034"
+     },
+     {
+      "at": "2026-10-22T10:05:24Z",
+      "price": "1.970254798518352228"
+     },
+     {
+      "at": "2026-10-22T11:15:35Z",
+      "price": "1.971767869146314138"
+     },
+     {
+      "at": "2026-10-22T12:28:29Z",
+      "price": "1.976580008964589869"
+     },
+     {
+      "at": "2026-10-22T15:11:41Z",
+      "price": "1.840336134453781512"
+     },
+     {
+      "at": "2026-10-23T07:38:15Z",
+      "price": "1.950156810035842294"
+     },
+     {
+      "at": "2026-10-23T08:45:15Z",
+      "price": "1.973018360949395431"
+     },
+     {
+      "at": "2026-10-23T09:43:00Z",
+      "price": "1.928643441245659234"
+     },
+     {
+      "at": "2026-10-23T11:03:59Z",
+      "price": "1.901119820828667412"
+     },
+     {
+      "at": "2026-10-23T12:01:12Z",
+      "price": "1.910312395028552234"
+     },
+     {
+      "at": "2026-10-23T12:44:24Z",
+      "price": "1.882260596546310831"
+     }
+    ],
+    "minimum": "0.01",
+    "step": "0.01"
+   }
+  },
+  "seconds": 1.0
+ },
+ "C1 open close_only XETRA:DRM3": {
+  "http": 409,
+  "body": {
+   "errors": [
+    "Quote stale."
+   ],
+   "error_code": "quote_stale"
+  },
+  "seconds": 1.52
+ }
+}

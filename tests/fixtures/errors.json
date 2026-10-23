@@ -1,0 +1,102 @@
+{
+ "recorded_at": "2026-10-23T13:05Z",
+ "base": "https://river-side.cc",
+ "errors": {
+  "invalid_order": {
+   "http": 422,
+   "errors": [
+    "Invalid order."
+   ]
+  },
+  "invalid_quantity": {
+   "http": 422,
+   "errors": [
+    "Invalid quantity."
+   ]
+  },
+  "market_closed": {
+   "http": 409,
+   "errors": [
+    "Market closed."
+   ]
+  },
+  "quote_stale": {
+   "http": 409,
+   "errors": [
+    "Quote stale."
+   ]
+  },
+  "position_conflict": {
+   "http": 409,
+   "errors": [
+    "Position conflict."
+   ]
+  },
+  "order_not_pending": {
+   "http": 409,
+   "errors": [
+    "Order not pending."
+   ]
+  },
+  "invalid_protection": {
+   "http": 422,
+   "errors": [
+    "Invalid protection."
+   ]
+  },
+  "stop_loss_beyond_liquidation": {
+   "http": 422,
+   "errors": [
+    "Stop-loss must trigger before the liquidation price."
+   ]
+  },
+  "MISSING_REQUEST_ID": {
+   "http": 400,
+   "errors": [
+    "param is missing or the value is empty or invalid: request_id"
+   ]
+  }
+ },
+ "success_shapes": {
+  "order": {
+   "order_id": 5586,
+   "status": "pending",
+   "replayed": false
+  },
+  "order_replay": {
+   "order_id": 5586,
+   "status": "pending",
+   "replayed": true
+  },
+  "cancel": {
+   "order_id": 5589,
+   "status": "canceled",
+   "replayed": false
+  },
+  "protection": {
+   "position_id": 525,
+   "replayed": false
+  },
+  "refresh": {
+   "instrument": "<instrument object>"
+  },
+  "order_details": {
+   "price": "81640.21",
+   "fee": "0.00008164021",
+   "margin": "0.08164021",
+   "gross": "0.08164021",
+   "reference_price": "81627.68"
+  }
+ },
+ "triggers": {
+  "invalid_order": "leverage > max_leverage",
+  "invalid_quantity": "quantity < minimum",
+  "market_closed": "market closed at that moment",
+  "position_conflict": "opposite side / different leverage / existing position",
+  "quote_stale": "stale quote: pre-open, post-close, or delayed feed",
+  "order_not_pending": "cancel a filled or already-canceled order",
+  "invalid_protection": "take_profit below break-even",
+  "stop_loss_beyond_liquidation": "stop_loss past liquidation price",
+  "MISSING_REQUEST_ID": "cancel or protection without request_id"
+ }
+}
