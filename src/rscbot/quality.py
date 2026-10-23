@@ -29,6 +29,8 @@ import time
 # rng -> (bar 间隔秒, 多久算"新鲜")
 BAR_STEP = {"1d": 300, "5d": 3600, "1y": 86400}
 FRESH_WINDOW = {"1d": 24 * 3600, "5d": 48 * 3600, "1y": 7 * 86400}
+# 覆盖统计的默认回看窗口（天）：1d 看最近 5 天，5d 看 7 天，1y 看 400 天
+DEFAULT_DAYS = {"1d": 5, "5d": 7, "1y": 400}
 # 交易所对一部分标的只发归档数据：1d 最后一根比这还旧，就当归档处理
 ARCHIVE_AFTER = 72 * 3600
 
@@ -47,45 +49,55 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
     return r is not None
 
 
-def coverage(conn: sqlite3.Connection, rng: str = "1d") -> dict:
-    """每个标的的缺口率：缺口 = 首末根之间应有的槽位数 - 实际根数。"""
+def coverage(conn: sqlite3.Connection, rng: str = "1d", now: int | None = None,
+             days: int | None = None) -> dict:
+    """最近 N 天内、按"标的 × 自然日"统计的缺口率。
+
+    为什么不按整个历史算：归档标的（7 月的旧 K 线）恢复后会接上今天的 bar，
+    首末根跨度几个月、中间全是洞，按整个历史算会得出 89% 这种没法用的数。
+    缺口真正的含义是"当天该有的 5m 槽位有没有缺"，所以按天切、只看最近几天。
+    """
+    now = int(time.time()) if now is None else now
+    days = days or DEFAULT_DAYS.get(rng, 5)
+    since = now - days * 86400
     if not _has_table(conn, "bars"):
         return {"rng": rng, "symbols": 0, "rows": 0, "expected": 0, "gaps": 0,
-                "gap_rate": 0.0, "worst": []}
+                "gap_rate": 0.0, "window_days": days, "worst": []}
     step = BAR_STEP.get(rng, 300)
     rows = conn.execute(
-        """SELECT b.instrument_id, i.symbol, i.category, COUNT(*) AS n,
-                  MIN(b.ts) AS first_ts, MAX(b.ts) AS last_ts
+        """SELECT b.instrument_id, i.symbol, i.category, b.ts
              FROM bars b LEFT JOIN instruments i ON i.id = b.instrument_id
-            WHERE b.rng = ?
-            GROUP BY b.instrument_id""",
-        (rng,),
+            WHERE b.rng = ? AND b.ts >= ?""",
+        (rng, since),
     ).fetchall()
-    total_slots = total_rows = 0
-    worst = []
+    meta = {}
+    per_day: dict[tuple[int, int], list[int]] = {}
     for r in rows:
-        span = (r["last_ts"] - r["first_ts"]) // step + 1 if r["n"] > 1 else 1
-        gaps = max(0, span - r["n"])
-        total_slots += span
-        total_rows += r["n"]
-        if span > 10:
-            worst.append({
-                "symbol": r["symbol"] or str(r["instrument_id"]),
-                "category": r["category"],
-                "bars": r["n"],
-                "expected": span,
-                "gap_rate": round(gaps / span, 4),
-            })
+        meta[r["instrument_id"]] = (r["symbol"], r["category"])
+        day = r["ts"] // 86400
+        per_day.setdefault((r["instrument_id"], day), []).append(r["ts"])
+    per_sym: dict[int, dict] = {}
+    for (iid, _day), ts_list in per_day.items():
+        span = (max(ts_list) - min(ts_list)) // step + 1
+        acc = per_sym.setdefault(iid, {"bars": 0, "expected": 0})
+        acc["bars"] += len(ts_list)
+        acc["expected"] += max(span, len(ts_list))
+    total_rows = total_slots = 0
+    worst = []
+    for iid, acc in per_sym.items():
+        total_rows += acc["bars"]
+        total_slots += acc["expected"]
+        if acc["expected"] >= 10:
+            sym, cat = meta.get(iid, (str(iid), None))
+            worst.append({"symbol": sym, "category": cat, "bars": acc["bars"],
+                          "expected": acc["expected"],
+                          "gap_rate": round(max(0, acc["expected"] - acc["bars"]) / acc["expected"], 4)})
     worst.sort(key=lambda x: x["gap_rate"], reverse=True)
     gaps = max(0, total_slots - total_rows)
     return {
-        "rng": rng,
-        "symbols": len(rows),
-        "rows": total_rows,
-        "expected": total_slots,
-        "gaps": gaps,
-        "gap_rate": round(gaps / total_slots, 4) if total_slots else 0.0,
-        "worst": worst[:8],
+        "rng": rng, "symbols": len(per_sym), "rows": total_rows, "expected": total_slots,
+        "gaps": gaps, "gap_rate": round(gaps / total_slots, 4) if total_slots else 0.0,
+        "window_days": days, "worst": worst[:8],
     }
 
 
@@ -179,7 +191,7 @@ def report(db: str, now: int | None = None) -> dict:
             "generated_at": now,
             "db": db,
             "db_mb": _db_mb(db),
-            "coverage": {rng: coverage(conn, rng) for rng in BAR_STEP},
+            "coverage": {rng: coverage(conn, rng, now) for rng in BAR_STEP},
             "freshness": freshness(conn, now),
         }
         if _has_table(conn, "quotes"):
@@ -261,9 +273,17 @@ def main() -> int:
     ap.add_argument("--reconcile", type=int, default=0, metavar="N",
                     help="抽 N 个标的重拉 history.json 对账（占额度）")
     ap.add_argument("--rng", default="1d", choices=sorted(BAR_STEP))
+    ap.add_argument("--days", type=int, default=None,
+                    help="覆盖统计回看天数（默认 1d=5, 5d=7, 1y=400）")
     args = ap.parse_args()
 
     rep = report(args.db)
+    if args.days:
+        conn = connect(args.db)
+        try:
+            rep["coverage"] = {k: coverage(conn, k, days=args.days) for k in BAR_STEP}
+        finally:
+            conn.close()
     if "error" in rep:
         print(rep["error"], file=sys.stderr)
         return 2

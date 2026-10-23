@@ -36,7 +36,7 @@ class CoverageTest(unittest.TestCase):
         path = _db([(1, "X", "us", ts, 100.0) for ts in (0, 300, 900, 1200)])
         try:
             conn = quality.connect(path)
-            c = quality.coverage(conn, "1d")
+            c = quality.coverage(conn, "1d", now=1200, days=1)
             conn.close()
         finally:
             os.unlink(path)
@@ -49,7 +49,7 @@ class CoverageTest(unittest.TestCase):
         path = _db([(1, "X", "us", i * 300, 100.0) for i in range(10)])
         try:
             conn = quality.connect(path)
-            c = quality.coverage(conn, "1d")
+            c = quality.coverage(conn, "1d", now=1200, days=1)
             conn.close()
         finally:
             os.unlink(path)

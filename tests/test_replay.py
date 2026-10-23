@@ -12,7 +12,8 @@ from rscbot import replay  # noqa: E402
 from rscbot.store import SCHEMA  # noqa: E402
 
 
-def _db(order_price=100.02, quote_price=100.0, qty=0.01, fee_bps=10.0):
+def _db(order_price=100.02, quote_price=100.0, qty=0.01, fee_bps=10.0,
+        created_at="1970-01-01T00:16:40Z"):
     path = tempfile.mktemp(suffix=".db")
     conn = sqlite3.connect(path)
     conn.executescript(SCHEMA)
@@ -25,7 +26,7 @@ def _db(order_price=100.02, quote_price=100.0, qty=0.01, fee_bps=10.0):
         "INSERT INTO orders (ts, order_id, instrument_id, symbol, side, status, quantity, "
         "leverage, price, fee, pnl, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (1000, 7, 1, "X", "long", "filled", qty, 1.0, order_price,
-         notional * fee_bps / 10000.0, None, "2026-10-23T13:02:06.904Z"))
+         notional * fee_bps / 10000.0, None, created_at))
     conn.commit()
     conn.close()
     return path
@@ -53,6 +54,18 @@ class ReplayTest(unittest.TestCase):
         finally:
             os.unlink(path)
         self.assertAlmostEqual(rep["rows"][0]["price_bps"], 2.0, places=9)
+
+    def test_order_without_nearby_quote_is_not_priced(self):
+        """6 月的老成交：created_at 附近没有报价，就不该给出 bp 偏差。"""
+        path = _db(created_at="2026-06-25T07:00:49.238Z")
+        try:
+            conn = replay.connect(path)
+            rep = replay.compare(conn)
+            conn.close()
+        finally:
+            os.unlink(path)
+        self.assertEqual(rep["price_checked"], 0)
+        self.assertEqual(rep["fee_checked"], 1)
 
     def test_duplicate_order_id_keeps_latest(self):
         path = _db()

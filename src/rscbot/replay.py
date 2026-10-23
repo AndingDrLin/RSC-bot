@@ -18,6 +18,7 @@ import json
 import os
 import sqlite3
 import sys
+from datetime import datetime
 
 
 def connect(db: str) -> sqlite3.Connection:
@@ -42,13 +43,34 @@ def filled_orders(conn: sqlite3.Connection) -> list[dict]:
     return sorted(latest.values(), key=lambda x: x["ts"])
 
 
+def _iso_to_epoch(s) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
 def reference_price(conn: sqlite3.Connection, instrument_id: int, ts: int,
                     window: int = 900) -> float | None:
+    """成交时刻之前、window 秒内的最近一条报价。
+
+    注意用 created_at（真实成交时间）而不是 ts（我们轮询观察到它的时间）：
+    账户里有 6 月的成交，ts 全是今天的快照时间，拿今天的报价去比会得出 8000 bp
+    的假偏差。
+    """
     r = conn.execute(
-        "SELECT price FROM quotes WHERE instrument_id=? AND ts<=? AND price IS NOT NULL "
-        "ORDER BY ts DESC LIMIT 1", (instrument_id, ts + window)
+        "SELECT price FROM quotes WHERE instrument_id=? AND ts<=? AND ts>=? "
+        "AND price IS NOT NULL ORDER BY ts DESC LIMIT 1",
+        (instrument_id, ts, ts - window),
     ).fetchone()
     return float(r["price"]) if r else None
+
+
+def _now() -> int:
+    import time
+    return int(time.time())
 
 
 def compare(conn: sqlite3.Connection, max_age_s: int = 900) -> dict:
@@ -71,7 +93,10 @@ def compare(conn: sqlite3.Connection, max_age_s: int = 900) -> dict:
             rec["fee_err"] = abs(fee_sim - fee)
             rec["fee_err_rel"] = rec["fee_err"] / fee if fee else 0.0
         rec["margin_sim"] = notional / lev
-        ref = reference_price(conn, o["instrument_id"], int(o["ts"]), max_age_s)
+        fill_ts = _iso_to_epoch(o["created_at"]) or int(o["ts"])
+        rec["fill_ts"] = fill_ts
+        rec["age_days"] = round((_now() - fill_ts) / 86400.0, 1)
+        ref = reference_price(conn, o["instrument_id"], fill_ts, max_age_s)
         if ref:
             rec["reference"] = ref
             rec["price_bps"] = abs(px / ref - 1.0) * 10000.0
@@ -84,6 +109,7 @@ def compare(conn: sqlite3.Connection, max_age_s: int = 900) -> dict:
         "max_fee_err": max((r["fee_err"] for r in checked), default=0.0),
         "max_fee_err_rel": max((r["fee_err_rel"] for r in checked), default=0.0),
         "price_checked": len(priced),
+        "priced_age_days": sorted(round((_now() - r["fill_ts"]) / 86400.0, 1) for r in priced),
         "max_price_bps": max((r["price_bps"] for r in priced), default=0.0),
         "mean_price_bps": (sum(r["price_bps"] for r in priced) / len(priced)) if priced else 0.0,
         "rows": rows,
